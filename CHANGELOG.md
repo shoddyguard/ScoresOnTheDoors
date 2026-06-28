@@ -7,6 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
-## [v0.0.0](https://github.com) (1970-01-01)
+## [v0.1.0-preview1](https://github.com/shoddyguard/ScoresOnTheDoors/releases/tag/v0.1.0-preview1) (2026-06-29)
 
-Placeholder entry. This will be replaced when you stage your first release.
+Preview release of the Scores on the Doors project.
