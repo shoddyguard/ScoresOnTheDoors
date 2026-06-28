@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tournament (tournament-agnostic core: WC 2026, Euros, etc.)
+// ---------------------------------------------------------------------------
+model Tournament {
+  id                  String  @id @default(cuid())
+  name                String
+  slug                String  @unique
+  timeZoneId          String  @default("Europe/London")
+  openFootballUrl     String?
+  isActive            Boolean @default(true)
+  lockEnabledGlobally Boolean @default(true)
+  pointsExactScore    Int     @default(2)
+  pointsCorrectResult Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams          Team[]
+  stages         Stage[]
+  groups         Group[]
+  participations TournamentParticipation[]
+  syncLogs       SyncLog[]
+  lockOverrides  PredictionLockOverride[]
+}
+
+// ---------------------------------------------------------------------------
+// Team
+// ---------------------------------------------------------------------------
+model Team {
+  id           String  @id @default(cuid())
+  tournamentId String
+  name         String
+  shortCode    String?
+  aliasesJson  String  @default("[]") // JSON array of alternative names for feed matching
+
+  tournament         Tournament    @relation(fields: [tournamentId], references: [id])
+  homeMatches        Match[]       @relation("HomeTeam")
+  awayMatches        Match[]       @relation("AwayTeam")
+  advancingResults   Result[]      @relation("AdvancingTeam")
+  predictedAdvancing Prediction[]  @relation("PredictedAdvancing")
+  groupTeams         GroupTeam[]
+
+  @@unique([tournamentId, name])
+}
+
+// ---------------------------------------------------------------------------
+// Stage  (kind = "Group" | "Knockout" - drives scoring strategy)
+// ---------------------------------------------------------------------------
+model Stage {
+  id           String @id @default(cuid())
+  tournamentId String
+  name         String
+  kind         String // "Group" | "Knockout"
+  ordinal      Int
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  matches    Match[]
+
+  @@unique([tournamentId, ordinal])
+}
+
+// ---------------------------------------------------------------------------
+// Group (12 groups A-L in WC2026)
+// ---------------------------------------------------------------------------
+model Group {
+  id           String @id @default(cuid())
+  tournamentId String
+  name         String
+  ordinal      Int
+
+  tournament Tournament  @relation(fields: [tournamentId], references: [id])
+  groupTeams GroupTeam[]
+  matches    Match[]
+
+  @@unique([tournamentId, name])
+}
+
+model GroupTeam {
+  id      String @id @default(cuid())
+  groupId String
+  teamId  String
+
+  group Group @relation(fields: [groupId], references: [id])
+  team  Team  @relation(fields: [teamId], references: [id])
+
+  @@unique([groupId, teamId])
+}
+
+// ---------------------------------------------------------------------------
+// Match
+// ---------------------------------------------------------------------------
+model Match {
+  id              String    @id @default(cuid())
+  stageId         String
+  groupId         String?
+  // OpenFootball stable join key (knockouts only)
+  externalNum     Int?
+  // Natural key for group matches (round + date + teams as slug)
+  externalRef     String?
+  // Nullable until placeholder resolves to a real team
+  homeTeamId      String?
+  awayTeamId      String?
+  homePlaceholder String?  // e.g. "Winner Group A", "W74"
+  awayPlaceholder String?
+  kickoffUtc      DateTime?
+  // Calendar date in tournament TZ ("YYYY-MM-DD"). Lock = 00:00 of this date.
+  matchDateLocal  String?
+  venue           String?
+  // "Scheduled" | "Live" | "Finished" | "Abandoned" | "Cancelled"
+  status          String   @default("Scheduled")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage         Stage                    @relation(fields: [stageId], references: [id])
+  group         Group?                   @relation(fields: [groupId], references: [id])
+  homeTeam      Team?                    @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam      Team?                    @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  result        Result?
+  predictions   Prediction[]
+  lockOverrides PredictionLockOverride[] @relation("MatchOverrides")
+
+  @@unique([stageId, externalNum])
+  @@unique([stageId, externalRef])
+}
+
+// ---------------------------------------------------------------------------
+// Result (1:1 with Match; created when match is played)
+// ---------------------------------------------------------------------------
+model Result {
+  id              String @id @default(cuid())
+  matchId         String @unique
+
+  // 90-min scoreline - always present; drives the ExactScore (green) tier
+  homeGoals90 Int
+  awayGoals90 Int
+
+  // Extra-time and penalties (nullable, populated from et/p in the feed)
+  homeGoalsET Int?
+  awayGoalsET Int?
+  homePens    Int?
+  awayPens    Int?
+
+  // Derived advancing team for knockouts (p > et > ft); persisted so scoring
+  // never re-derives bracket logic. Null for group matches.
+  advancingTeamId String?
+
+  // "OpenFootball" | "ManualOverride"
+  source           String  @default("OpenFootball")
+  // If true, auto-sync MUST NOT overwrite this result
+  isManualOverride Boolean @default(false)
+  overriddenById   String?
+  overriddenAt     DateTime?
+
+  confirmedAt DateTime @default(now())
+  // Bumped on every write; predictions cache this to detect stale scores
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  match         Match @relation(fields: [matchId], references: [id])
+  advancingTeam Team? @relation("AdvancingTeam", fields: [advancingTeamId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Prediction
+// ---------------------------------------------------------------------------
+model Prediction {
+  id      String @id @default(cuid())
+  matchId String
+  userId  String
+
+  // Predicted 90-min scoreline (all match types)
+  homeGoals Int
+  awayGoals Int
+
+  // Knockout only: explicit "who advances" pick
+  predictedAdvancingTeamId String?
+
+  // "Web" | "CsvImport" | "AdminBackEntry"
+  submittedVia String @default("Web")
+
+  // Denormalised scoring cache - populated by ScoringService
+  awardedPoints              Int?
+  // "Wrong" | "CorrectResult" | "ExactScore"
+  scoreTier                  String?
+  // The Result.version this was scored against (stale if Result.version > this)
+  scoredAgainstResultVersion Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(1)
+
+  match                  Match   @relation(fields: [matchId], references: [id])
+  user                   User    @relation(fields: [userId], references: [id])
+  predictedAdvancingTeam Team?   @relation("PredictedAdvancing", fields: [predictedAdvancingTeamId], references: [id])
+
+  @@unique([matchId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// PredictionLockOverride - admin unlock for catch-up
+// ---------------------------------------------------------------------------
+model PredictionLockOverride {
+  id           String    @id @default(cuid())
+  tournamentId String
+  // "Global" | "Match" | "User" | "UserMatch"
+  scope        String
+  matchId      String?
+  userId       String?
+  // If set, override auto-expires at this UTC time
+  unlockedUntil DateTime?
+  reason       String?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  isActive     Boolean   @default(true)
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  match      Match?     @relation("MatchOverrides", fields: [matchId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// TournamentParticipation - per-user entry in a tournament
+// ---------------------------------------------------------------------------
+model TournamentParticipation {
+  id           String   @id @default(cuid())
+  tournamentId String
+  userId       String
+  // Admin-set baseline from pen-and-paper scores (added to computed points)
+  startingScore Int     @default(0)
+  joinedAt      DateTime @default(now())
+  isActive      Boolean  @default(true)
+  displayName   String?  // optional per-tournament alias
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// User (Auth.js Credentials + future OIDC)
+// ---------------------------------------------------------------------------
+model User {
+  id               String    @id @default(cuid())
+  username         String    @unique
+  email            String?   @unique
+  // bcrypt hash; nullable for future OIDC-only users
+  passwordHash     String?
+  fullName         String
+  displayName      String?
+  // "Admin" | "Player"
+  role             String    @default("Player")
+  // Entra ID object ID (oid) for future OIDC account linking
+  externalObjectId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  predictions    Prediction[]
+  participations TournamentParticipation[]
+}
+
+// ---------------------------------------------------------------------------
+// SyncLog - audit trail for OpenFootball sync runs
+// ---------------------------------------------------------------------------
+model SyncLog {
+  id           String @id @default(cuid())
+  tournamentId String
+  // "Scheduled" | "Manual"
+  trigger      String
+
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  matchesCreated       Int @default(0)
+  matchesUpdated       Int @default(0)
+  resultsApplied       Int @default(0)
+  overridesSkipped     Int @default(0)
+  placeholdersResolved Int @default(0)
+  predictionsRescored  Int @default(0)
+
+  // "Success" | "Partial" | "Error"
+  outcome     String?
+  messageJson String? // JSON array of per-match errors
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+}

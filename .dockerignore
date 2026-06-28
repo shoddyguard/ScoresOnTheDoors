@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env.local
+.env.development.local
+.next
+node_modules
+npm-debug.log
+*.db
+*.db-shm
+*.db-wal
+prisma/dev.db
+README.md
+Brieft.txt

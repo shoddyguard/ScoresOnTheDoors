@@ -1,0 +1,48 @@
+{
+  "name": "scoresonthedoors",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:clean": "node -e \"const fs=require('fs');['prisma/dev.db','prisma/dev.db-journal','prisma/dev.db-wal','prisma/dev.db-shm'].forEach(f=>{try{fs.rmSync(f,{force:true})}catch{}})\"",
+    "db:reset": "npm run db:clean && prisma db push --force-reset && prisma generate && tsx prisma/seed.ts",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "async-mutex": "^0.5.0",
+    "bcryptjs": "^2.4.3",
+    "csv-parse": "^5.5.6",
+    "flag-icons": "^7.5.0",
+    "luxon": "^3.5.0",
+    "next": "^15.3.3",
+    "next-auth": "5.0.0-beta.31",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.9",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.3.3",
+    "postcss": "^8.5.1",
+    "prisma": "^6.0.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}
