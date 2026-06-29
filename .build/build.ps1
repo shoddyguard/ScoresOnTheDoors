@@ -64,7 +64,7 @@ param
     )]
     [ValidateNotNullOrEmpty()]
     [string]
-    $GitHubRepoOwner = 'Brownserve-UK',
+    $GitHubRepoOwner = 'shoddyguard',
 
     # The GitHub repo name
     [Parameter(
