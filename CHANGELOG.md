@@ -7,13 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
-## [v0.1.0](https://github.com/shoddyguard/ScoresOnTheDoors/tree/v0.1.0) (2026-06-29)
+## [v0.1.0](https://github.com/shoddyguard/ScoresOnTheDoors/tree/v0.1.0-preview2) (2026-06-29)
 
 ### Added
 
 - feat: allow setting  PUID/PGID for the container in [#1](https://github.com/shoddyguard/ScoresOnTheDoors/pull/1) by [@shoddyguard](https://github.com/shoddyguard)
 
 
-## [v0.1.0-preview1](https://github.com/shoddyguard/ScoresOnTheDoors/releases/tag/v0.1.0-preview1) (2026-06-29)
+## [v0.1.0-preview1](https://github.com/shoddyguard/ScoresOnTheDoors/tree/v0.1.0-preview1) (2026-06-29)
 
 Preview release of the Scores on the Doors project.
