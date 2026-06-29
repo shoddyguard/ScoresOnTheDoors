@@ -1,7 +1,7 @@
 # Multi-stage build for standalone Next.js + SQLite
 # Use Debian-based image (NOT Alpine) to include tzdata for IANA timezone support
 FROM node:26-bookworm-slim AS base
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends gosu openssl && rm -rf /var/lib/apt/lists/*
 
 # ---- deps stage ----
 FROM base AS deps
@@ -52,7 +52,8 @@ RUN chmod +x docker-entrypoint.sh
 # SQLite data directory (mount a volume here)
 RUN mkdir -p /data && chown nextjs:nodejs /data
 
-USER nextjs
+# Container starts as root so the entrypoint can adjust UID/GID at runtime.
+# The entrypoint drops to the nextjs user via gosu before exec'ing the app.
 
 EXPOSE 3000
 ENV PORT=3000
